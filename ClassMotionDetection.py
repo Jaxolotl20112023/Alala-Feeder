@@ -30,10 +30,12 @@ class Camera() :
         self.buffer_output = CircularOutput(buffersize=150)
         self.storer = storage("Video","videoData",{
             "id": 0,
-            "date": None
+            "date": None, 
+            "iteration": 0
         })
 
         self.num_recording = 0
+        self.num_pictures = 0
         self.name = "\0"
         
     def start_preview(self):
@@ -49,11 +51,25 @@ class Camera() :
         print("start recording") 
         self.name = f"./videos/{date}-{self.num_recording}.mp4" 
         self.storer.append("date",f"{date} {hms_generator()}")
+        self.storer.append("iteration", self.num_recording)
         self.picam.start_and_record_video(self.name, duration=duration, quality=Quality.MEDIUM)
     
-    def save_record_data(self) :
+    def save_capture_data(self,override_path=None) :
+        if (override_path) :
+            self.storer.path = override_path
+            
         self.storer.save()
         self.storer.fileSave() 
+
+    def capture_pic(self) :
+        self.num_pictures+=1 
+        name = f"{date_generator}-{self.num_recording}.png"
+        self.picam.start() 
+        sleep(2)
+        self.picam.capture_file(f"./imgs/{name}")
+
+        self.storer.append("date", f"{date_generator()} {hms_generator()}")
+        self.storer.append("iteration", self.num_pictures)
 
     # def buffer_recording(self,duration): 
     #     self.num_recording+=1 
@@ -261,6 +277,7 @@ feederStorer = storage("FeederData", "feederData", {
 foodStorer = storage("FoodData", "foodData") 
 duration = 5
 recording_thread = threading.Thread(target=cam1.simple_record, args=(duration,))    
+static_img_thread = threading.Thread(target=cam1.capture_pic)
 
 start_time = perf_counter() 
 
@@ -276,6 +293,7 @@ print("Time: ",datetime.strftime(datetime.now(),"%H"))
 # time.sleep(3)
     
 def MotionDetectionMain() :
+    global static_img_thread
     global recording_thread
     global start_time
 
@@ -312,7 +330,7 @@ def MotionDetectionMain() :
                 # get weight of food, etc... 
              
             recording_thread.join()
-            cam1.save_record_data()
+            cam1.save_capture_data()
             print("join thread") 
             recording_thread = threading.Thread(target=cam1.simple_record, args=(duration,))    
 
