@@ -12,9 +12,10 @@ from rclone_python import rclone
 import os
 import threading
 from picamera2 import Picamera2
-from picamera2.encoders import Quality
+from picamera2.encoders import Quality, H264Encoder
+from picamera2.outputs import CircularOutput
 from Constants import API_BASE_URL
-
+from Utility import date_generator,hms_generator
 
 GPIO.setmode(GPIO.BCM)
 MIN_BIRD_WEIGHT = 70 # change to the actual miniumum weight of the alala bird
@@ -25,14 +26,15 @@ class Camera() :
     
     def __init__(self) :
         self.picam = Picamera2()
-        self.video = None
-        
-        self.record_num = 0
-        self.capture_start = False
-        self.start = None
-        self.capture_end = False
+        self.encoder = H264Encoder() 
+        self.buffer_output = CircularOutput(buffersize=150)
+        self.storer = storage("Video","videoData",{
+            "id": 0,
+            "date": None
+        })
+
+        self.num_recording = 0
         self.name = "\0"
-        self.is_recording = False
         
     def start_preview(self):
         self.picam.start_preview()
@@ -42,23 +44,36 @@ class Camera() :
         self.picam.close()
 
     def simple_record(self,duration) :
+        date = date_generator() 
+        self.num_recording+=1 
         print("start recording") 
-        self.record_num += 1
-        self.name = f"./videos/{self.record_num}.mp4" 
+        self.name = f"./videos/{date}-{self.num_recording}.mp4" 
+        self.storer.append("date",f"{date} {hms_generator()}")
         self.picam.start_and_record_video(self.name, duration=duration, quality=Quality.MEDIUM)
+    
+    def save_record_data(self) :
+        self.storer.save()
+        self.storer.fileSave() 
+
+    # def buffer_recording(self,duration): 
+    #     self.num_recording+=1 
+    #     self.name = f"./videos/{date_generator()}-{self.num_recording}.mp4" 
+    #     self.picam.start_recording(self.encoder,self.buffer_output)
+    #     sleep(duration) 
+    #     self.buffer_output.fileoutput = self.name 
+    #     self.buffer_output.stop()
+    #     self.picam.stop_recording()
 
 class storage() :
     
-    def __init__(self,name,path) :
+    def __init__(self,name,path,data_outline:dict) :
+        self.data_outline = data_outline
+        self.currData = self.data_outline
+
         self.name = name
         self.path = path
-        self.dfData = []
-        self.currData = {
-            "id" : 0,
-            "weights" : [],
-            "avgWeight" : 0.0
-        }
-        self.file_name = f"./{self.path}/{self.name}_{datetime.now().month}-{datetime.now().day}-{datetime.now().year}.json"
+        self.dfData:list[dict] = None 
+        self.file_name = f"./{self.path}/{self.name}_{date_generator()}.json"
     
     def append(self,attr,data) :
         self.currData[attr] = data
@@ -67,16 +82,12 @@ class storage() :
         
     def save(self) :
         self.dfData.append(self.currData)
-        self.currData = {
-            "id" : 0,
-            "weights" : [],
-            "avgWeight" : 0.0
-        }
+        self.currData = self.data_outline 
         
     def fileSave(self) :
-        print(f"{self.name}_{datetime.now().month}-{datetime.now().day}-{datetime.now().year}.json")
+        print(f"{self.name}_{date_generator()}.json")
         pd.DataFrame(self.dfData).to_json(self.file_name, orient="records")
-        self.file_name = f"./{self.path}/{self.name}_{datetime.now().month}-{datetime.now().day}-{datetime.now().year}.json"
+        self.file_name = f"./{self.path}/{self.name}_{date_generator()}.json"
         
     def getData(self) :
         return self.dfData
@@ -90,7 +101,6 @@ class load_cell() :
         self.dout = dout
         self.sck = sck
         self.ratio = ratio
-        self.file_name = file_name
         self.hx = HX711(dout_pin=self.dout, pd_sck_pin=self.sck) 
         self.hx.zero() 
         self.hx.set_scale_ratio(ratio) 
@@ -98,7 +108,6 @@ class load_cell() :
     def activate(self) : 
 
         hx = self.hx
-        file_name = self.file_name
         
         prevWeight = 0
         totalWeight = 0
@@ -107,6 +116,8 @@ class load_cell() :
         numInvalidWeights = 0 
         i = 0
         maxReadings = 4
+
+        birdStorer.append("hms", hms_generator())
         
         while i < maxReadings :
             prevWeight = weight
@@ -119,13 +130,12 @@ class load_cell() :
                 if numInvalidWeights > 10 :
                     print("TOO MANY INVALID WEIGHTS... SKIPPING...")
                     return
-                
                 continue
             
             numInvalidWeights = 0 
             totalWeight += weight
             
-            birdStorer.currData["weights"].append(weight) 
+            birdStorer.append("weights",weight) 
             
             print(weight,'grams')
             i+=1
@@ -135,7 +145,6 @@ class load_cell() :
         print("Average Weight: ", averageWeight)
         birdStorer.append("avgWeight", averageWeight) 
 
-        
     def deactivate(self) : 
         GPIO.output(self.dout,GPIO.LOW)
         GPIO.output(self.sck, GPIO.LOW) 
@@ -157,12 +166,14 @@ class rfid() :
 
         if p.is_alive() :
             p.terminate()
+            cam1.storer.append("id", "UNIDENTIFIED")
             print("NO IDS DETECTED")
                 
             return False 
         else :
             self.id = q.get()
             birdStorer.append("id", self.id)
+            cam1.storer.append("id", self.id)
             p.terminate()
             
             return True
@@ -170,7 +181,6 @@ class rfid() :
     def readCard (self,q): 
 
         reader = self.reader
-        
         print('Place Card on Reader')
         
         try :
@@ -232,11 +242,22 @@ rfid1 = rfid()
 
 # Load cell set up 
 ratio = 111 # kinda correct ratio is -95.4
-bird_cell = load_cell(4,17,ratio,"ALALA_BIRD_DATA")
+bird_cell = load_cell(4,17,ratio)
 # feeder_cell = load_cell(0,0,ratio,"ALALA_FEEDER_DATA")
 
-birdStorer = storage("BirdData","birdData")
-feederStorer = storage("FeederData", "feederData")
+birdStorer = storage("BirdData","birdData", {
+    "hms": None, 
+    "id": 0, 
+    "weights": [], 
+    "avgWeight": 0
+})
+
+feederStorer = storage("FeederData", "feederData", {
+    "id": 0, 
+    "weights": [], 
+    "avgWeight": 0
+})
+
 foodStorer = storage("FoodData", "foodData") 
 duration = 5
 recording_thread = threading.Thread(target=cam1.simple_record, args=(duration,))    
@@ -257,7 +278,9 @@ print("Time: ",datetime.strftime(datetime.now(),"%H"))
 def MotionDetectionMain() :
     global recording_thread
     global start_time
-    
+
+    bird_present = False
+
     while True:
         
         sleep(0.2)
@@ -273,18 +296,23 @@ def MotionDetectionMain() :
             except :
                 print("failed to connect") 
 
-        if motionDetector:
+        if motionDetector or bird_present:
              
             print("Motion Detected")
-             
             recording_thread.start()
              
             if rfid1.getIDMain() :
+                bird_present = True
+
                 bird_cell.activate()
                 birdStorer.save()
                 birdStorer.fileSave()
+            else : 
+                bird_present = False 
+                # get weight of food, etc... 
              
             recording_thread.join()
+            cam1.save_record_data()
             print("join thread") 
             recording_thread = threading.Thread(target=cam1.simple_record, args=(duration,))    
 
