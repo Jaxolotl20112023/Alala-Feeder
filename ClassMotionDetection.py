@@ -88,7 +88,7 @@ class storage() :
 
         self.name = name
         self.path = path
-        self.dfData:list[dict] = None 
+        self.dfData:list[dict] = [{}] 
         self.file_name = f"./{self.path}/{self.name}_{date_generator()}.json"
     
     def append(self,attr,data) :
@@ -243,7 +243,7 @@ class servo() :
 
 # Motion sensor set up
 sensor = 27
-GPIO.setup(sensor, GPIO.IN)
+GPIO.setup(27, GPIO.IN)
 # Servo set up
 servo1 = servo(18)
 
@@ -258,7 +258,7 @@ rfid1 = rfid()
 
 # Load cell set up 
 ratio = 111 # kinda correct ratio is -95.4
-bird_cell = load_cell(4,17,ratio)
+bird_cell = load_cell(4,17,ratio,"birdData")
 # feeder_cell = load_cell(0,0,ratio,"ALALA_FEEDER_DATA")
 
 birdStorer = storage("BirdData","birdData", {
@@ -274,7 +274,7 @@ feederStorer = storage("FeederData", "feederData", {
     "avgWeight": 0
 })
 
-foodStorer = storage("FoodData", "foodData") 
+#foodStorer = storage("FoodData", "foodData") 
 duration = 5
 recording_thread = threading.Thread(target=cam1.simple_record, args=(duration,))    
 static_img_thread = threading.Thread(target=cam1.capture_pic)
@@ -314,7 +314,7 @@ def MotionDetectionMain() :
             except :
                 print("failed to connect") 
 
-        if motionDetector or bird_present:
+        if GPIO.input(27) or bird_present:
              
             print("Motion Detected")
             recording_thread.start()
