@@ -16,11 +16,16 @@ from picamera2.encoders import Quality, H264Encoder
 from picamera2.outputs import CircularOutput
 from Constants import API_BASE_URL
 from Utility import date_generator,hms_generator
+from startUp import start_up
+
+init_data = start_up()
 
 GPIO.setmode(GPIO.BCM)
 MIN_BIRD_WEIGHT = 70 # change to the actual miniumum weight of the alala bird
 WEIGHT_CHANGE_ERR = 30 # the amount of change in weight that the program deems valid
  # this is temporary. need to replace it to the IPv4 address that is associated with the laptop using to run this
+INIT_FOOD = 500  # in grams 
+days_operating = init_data["daysOperating"]
 
 class Camera() :
     
@@ -133,7 +138,7 @@ class load_cell() :
         i = 0
         maxReadings = 4
 
-        birdStorer.append("hms", hms_generator())
+        birdStorer.append("date", f"{date_generator()} {hms_generator()}")
         
         while i < maxReadings :
             prevWeight = weight
@@ -241,6 +246,16 @@ class servo() :
     def reset_servo(self) :
         self.servo.value = None
 
+def query(endpoint, data, callback): 
+    try : 
+        print("SEND DATA TO THE API")
+        r = requests.post(f'{API_BASE_URL}/{endpoint}', json=data)
+        
+        callback(r)
+
+    except :
+        print("failed to connect") 
+
 # Motion sensor set up
 sensor = 27
 GPIO.setup(27, GPIO.IN)
@@ -262,7 +277,7 @@ bird_cell = load_cell(4,17,ratio,"birdData")
 # feeder_cell = load_cell(0,0,ratio,"ALALA_FEEDER_DATA")
 
 birdStorer = storage("BirdData","birdData", {
-    "hms": None, 
+    "date": None, 
     "id": 0, 
     "weights": [], 
     "avgWeight": 0
@@ -272,6 +287,14 @@ feederStorer = storage("FeederData", "feederData", {
     "id": 0, 
     "weights": [], 
     "avgWeight": 0
+})
+
+stationStorer = storage("StationData", "stationData", {
+    "date": None, 
+    # "battery": 0
+    # "temperature": 0
+    # "humidity": 0 
+    "foodLeft": 0, 
 })
 
 #foodStorer = storage("FoodData", "foodData") 
@@ -303,36 +326,40 @@ def MotionDetectionMain() :
         
         sleep(0.2)
         
-        if (perf_counter() - start_time) >= 10: #(perf_counter() - start_time)/360 > 19 :
-            try : 
-                start_time = perf_counter()
-                print("SEND DATA TO THE API")
-                r = requests.post(f'{API_BASE_URL}/pushBirdWeight', json=birdStorer.dfData)
-                
-                if r.status_code == 201 or r.status_code == 200 :
-                    os.remove(birdStorer.getFilePath())
-            except :
-                print("failed to connect") 
+        if (perf_counter() - start_time)/3600 > 19 :
+            start_time = perf_counter()
+            query("pushBirdWeight", birdStorer.dfData, lambda r: os.remove(birdStorer.getFilePath()) if r.status_code == 201 or r.status_code == 200 else print("could not send bird weight"))
+            query("pushStationData", stationStorer.dfData, lambda r: os.remove(stationStorer.getFilePath()) if r.status_code == 201 or r.status_code == 200 else print("could not report pi health"))
+            days_operating+=1
 
+        if (perf_counter() - start_time)/60 >= 10:
+            start_time = perf_counter()
+            stationStorer.append("date", f"{date_generator()} {hms_generator()}")
+            stationStorer.append("foodLeft", INIT_FOOD-(200*days_operating))
+            stationStorer.save()
+            stationStorer.fileSave()
+            
         if GPIO.input(27) or bird_present:
              
             print("Motion Detected")
             recording_thread.start()
              
-            if rfid1.getIDMain() :
-                bird_present = True
-
-                bird_cell.activate()
-                birdStorer.save()
-                birdStorer.fileSave()
-            else : 
-                bird_present = False 
-                # get weight of food, etc... 
-             
+            bird_present = rfid1.getIDMain()
+        
+            bird_cell.activate()
+            birdStorer.save()
+            birdStorer.fileSave()
+           
             recording_thread.join()
             cam1.save_capture_data()
             print("join thread") 
             recording_thread = threading.Thread(target=cam1.simple_record, args=(duration,))    
+
+            while (rfid1.getIDMain()): 
+                sleep(2) 
+
+            # get the weight of the food... 
+            # etc...  
 
         else:
             print("No motion")
