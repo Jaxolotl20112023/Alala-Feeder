@@ -1,6 +1,6 @@
 from datetime import datetime 
 from pathlib import Path
-from enum import Enum
+
 
 import pandas as pd
 
@@ -31,15 +31,6 @@ def save_file(path, data, file_type="*.json") :
     elif "csv" in file_type : 
         pd.DataFrame(data).to_json(path, orient="records")
 
-class Status(Enum) :
-    BAD_CONNECTION = "Bad Connection"
-    GOOD_CONNECTION = "Good Connection"
-
-    NO_POWER = "No Power"
-    HAS_POWER = "Has Power"
-
-    INVALID_READINGS = "Invalid Readings"
-    VALID_READINGS = "Valid Readings"
 
 
 

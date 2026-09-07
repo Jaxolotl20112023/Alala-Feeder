@@ -17,7 +17,8 @@ from picamera2.outputs import CircularOutput
 from Constants import API_BASE_URL
 from Utility import date_generator,hms_generator
 from startUp import start_up
-from Utility import Status
+from Constants import Status
+from Constants import ALLOWED_IDS
 
 init_data = start_up()
 
@@ -26,7 +27,8 @@ MIN_BIRD_WEIGHT = 70 # change to the actual miniumum weight of the alala bird
 WEIGHT_CHANGE_ERR = 30 # the amount of change in weight that the program deems valid
  # this is temporary. need to replace it to the IPv4 address that is associated with the laptop using to run this
 INIT_FOOD = 500  # in grams 
-days_operating = init_data["daysOperating"]
+FOOD_DISPENSED =  200
+days_operating = init_data["days_operating"]
 
 
 
@@ -204,6 +206,11 @@ class rfid() :
             return False 
         else :
             self.id = q.get()
+
+            if self.id not in ALLOWED_IDS.values(): 
+                print("BIRD NOT ASSOCIATED WITH THIS FEEDER")
+                return False 
+            
             birdStorer.append("id", self.id)
             cam1.storer.append("id", self.id)
             p.terminate()
@@ -350,7 +357,8 @@ def MotionDetectionMain() :
         if (perf_counter() - start_time)/60 >= 10:
             start_time = perf_counter()
             stationStorer.append("date", f"{date_generator()} {hms_generator()}")
-            stationStorer.append("foodLeft", INIT_FOOD-(200*days_operating))
+            stationStorer.append("foodLeft", INIT_FOOD-(FOOD_DISPENSED*days_operating))
+            stationStorer.appemnd("days_operating", days_operating)
             stationStorer.save()
             stationStorer.fileSave()
             

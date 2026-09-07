@@ -18,7 +18,7 @@ def start_up() :
             "Feed-Station-Data" : {
                 "feederID" : str(feeder_id),
                 "foodLeft" : 500,
-                "daysOperating" : 0
+                "days_operating" : 0
             }
         }
         
