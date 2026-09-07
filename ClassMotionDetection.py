@@ -17,6 +17,7 @@ from picamera2.outputs import CircularOutput
 from Constants import API_BASE_URL
 from Utility import date_generator,hms_generator
 from startUp import start_up
+from Utility import Status
 
 init_data = start_up()
 
@@ -26,6 +27,8 @@ WEIGHT_CHANGE_ERR = 30 # the amount of change in weight that the program deems v
  # this is temporary. need to replace it to the IPv4 address that is associated with the laptop using to run this
 INIT_FOOD = 500  # in grams 
 days_operating = init_data["daysOperating"]
+
+
 
 class Camera() :
     
@@ -118,13 +121,14 @@ class storage() :
     
 class load_cell() : 
 
-    def __init__(self,dout,sck,ratio,file_name) : 
+    def __init__(self,dout,sck,ratio,load_name) : 
         self.dout = dout
         self.sck = sck
         self.ratio = ratio
         self.hx = HX711(dout_pin=self.dout, pd_sck_pin=self.sck) 
         self.hx.zero() 
         self.hx.set_scale_ratio(ratio) 
+        self.load_name = load_name 
 
     def activate(self) : 
 
@@ -150,6 +154,11 @@ class load_cell() :
                 
                 if numInvalidWeights > 10 :
                     print("TOO MANY INVALID WEIGHTS... SKIPPING...")
+                    birdStorer.append("weights", None)
+                    birdStorer.append("avgWeight", None)
+
+                    stationStorer.append(self.load_name, Status.INVALID_READINGS)
+                    
                     return
                 continue
             
@@ -165,6 +174,7 @@ class load_cell() :
         
         print("Average Weight: ", averageWeight)
         birdStorer.append("avgWeight", averageWeight) 
+        stationStorer.append(self.load_name, Status.VALID_READINGS)
 
     def deactivate(self) : 
         GPIO.output(self.dout,GPIO.LOW)
@@ -173,10 +183,11 @@ class load_cell() :
         
 class rfid() : 
 
-    def __init__(self) : 
+    def __init__(self, name) : 
         GPIO.setmode(GPIO.BCM)                
         self.reader = SimpleMFRC522()
         self.id = None
+        self.name = name
 
     def getIDMain (self):
         q = Queue()
@@ -273,7 +284,7 @@ rfid1 = rfid()
 
 # Load cell set up 
 ratio = 111 # kinda correct ratio is -95.4
-bird_cell = load_cell(4,17,ratio,"birdData")
+bird_cell = load_cell(4,17,ratio,"birdLoadCell")
 # feeder_cell = load_cell(0,0,ratio,"ALALA_FEEDER_DATA")
 
 birdStorer = storage("BirdData","birdData", {
@@ -295,6 +306,10 @@ stationStorer = storage("StationData", "stationData", {
     # "temperature": 0
     # "humidity": 0 
     "foodLeft": 0, 
+    "birdLoadCell" : [Status.HAS_POWER, Status.VALID_READINGS],
+    "feedLoadCell" : [Status.HAS_POWER, Status.VALID_READINGS],
+    "motionDetector" : [Status.HAS_POWER, Status.VALID_READINGS],
+    "RFIDreader" : [Status.HAS_POWER, Status.VALID_READINGS],
 })
 
 #foodStorer = storage("FoodData", "foodData") 
