@@ -18,7 +18,7 @@ from Constants import API_BASE_URL
 from Utility import date_generator,hms_generator
 from startUp import start_up
 from Constants import Status
-from Constants import ALLOWED_IDS
+# from Constants import ALLOWED_IDS
 
 init_data = start_up()
 
@@ -29,7 +29,7 @@ WEIGHT_CHANGE_ERR = 30 # the amount of change in weight that the program deems v
 INIT_FOOD = 500  # in grams 
 FOOD_DISPENSED =  200
 days_operating = init_data["days_operating"]
-
+ALLOWED_IDS = [223041367485,288073526777]
 
 
 class Camera() :
@@ -207,7 +207,8 @@ class rfid() :
         else :
             self.id = q.get()
 
-            if self.id not in ALLOWED_IDS.values(): 
+            if self.id not in ALLOWED_IDS:
+                print(self.id)
                 print("BIRD NOT ASSOCIATED WITH THIS FEEDER")
                 return False 
             
@@ -287,7 +288,7 @@ motionDetector = GPIO.input(sensor)
 cam1 = Camera()
 
 # RFID set up 
-rfid1 = rfid() 
+rfid1 = rfid(name="rfid1") 
 
 # Load cell set up 
 ratio = 111 # kinda correct ratio is -95.4

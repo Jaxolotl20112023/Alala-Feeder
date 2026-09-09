@@ -1,5 +1,6 @@
 from enum import Enum
-from Utility import get_file
+from Utility import get_json
+import pandas as pd
 
 API_BASE_URL = 'http://172.20.10.9:3500'
 
@@ -13,4 +14,4 @@ class Status(Enum) :
     INVALID_READINGS = "Invalid Readings"
     VALID_READINGS = "Valid Readings"
 
-ALLOWED_IDS = get_file('./allowedIDs.json')
+# ALLOWED_IDS = pd.read_json("./allowedIDs.json",lines="true").to_dict()

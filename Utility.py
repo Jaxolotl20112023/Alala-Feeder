@@ -10,11 +10,16 @@ def date_generator() :
 def hms_generator() : 
     return datetime.now().strftime("%H-%M-%S")
 
-def get_file(path, file_type="*.json") :
+def get_recent_file(path, file_type="*.json") :
 
     folder_path = Path(path)
 
     files = folder_path.glob(file_type)
+    
+    print("file")
+    for file in files:
+        
+        print(file.stat().st_mtime)
 
     filtered =  max(files, key=lambda x: x.stat().st_mtime)
 
@@ -24,6 +29,9 @@ def get_file(path, file_type="*.json") :
         return None 
     
     return convert
+
+def get_json(path) :
+    return pd.read_json(path,lines="true").to_dict()
 
 def save_file(path, data, file_type="*.json") : 
     if "json" in file_type : 
