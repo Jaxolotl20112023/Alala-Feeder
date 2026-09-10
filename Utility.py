@@ -1,8 +1,7 @@
 from datetime import datetime 
 from pathlib import Path
-
-
-import pandas as pd
+import json
+# import pandas as pd
 
 def date_generator() :
     return datetime.now().strftime("%m-%d-%Y")
@@ -10,7 +9,7 @@ def date_generator() :
 def hms_generator() : 
     return datetime.now().strftime("%H-%M-%S")
 
-def get_recent_file(path, file_type="*.json") :
+def get_recent_file(path, file_type="*.json",date=None) :
 
     folder_path = Path(path)
 
@@ -18,20 +17,24 @@ def get_recent_file(path, file_type="*.json") :
     
     print("file")
     for file in files:
-        
         print(file.stat().st_mtime)
 
-    filtered =  max(files, key=lambda x: x.stat().st_mtime)
-
+    if not date: 
+        filtered = max(files, key=lambda x: x.stat().st_mtime) 
+    else :
+        for file in files:
+            if datetime.fromtimestamp(file.stat().st_mtime) == date:
+                filtered = file
+             
     try :
-        convert = pd.read_csv(filtered).to_dict() if "csv" in file_type else pd.read_json(filtered).to_dict() if "json" in file_type else None
+        with open(f"{folder_path}/{filtered.name}") as f:
+            return json.load(f)
     except :
         return None 
     
-    return convert
-
-def get_json(path) :
-    return pd.read_json(path,lines="true").to_dict()
+    
+# def get_json(path) :
+#     return pd.read_json(path,lines="true").to_dict()
 
 def save_file(path, data, file_type="*.json") : 
     if "json" in file_type : 

@@ -15,7 +15,7 @@ from picamera2 import Picamera2
 from picamera2.encoders import Quality, H264Encoder
 from picamera2.outputs import CircularOutput
 from Constants import API_BASE_URL
-from Utility import date_generator,hms_generator
+from Utility import date_generator,hms_generator,get_recent_file
 from startUp import start_up
 from Constants import Status
 # from Constants import ALLOWED_IDS
@@ -98,9 +98,9 @@ class storage() :
         self.currData = self.data_outline.copy()
 
         self.name = name
-        self.path = path
-        self.dfData:list[dict] = [] 
-        self.file_name = f"./{self.path}/{self.name}_{date_generator()}.json"
+        self.path = f"./{path}"
+        self.dfData:list[dict] = get_recent_file(path) if get_recent_file(path) else []  
+        self.file_name = f"{self.path}/{self.name}_{date_generator()}.json"
     
     def append(self,attr,data) :
         self.currData[attr] = data
@@ -122,7 +122,7 @@ class storage() :
  
         print(f"{self.name}_{date_generator()}.json")
         pd.DataFrame(self.dfData).to_json(self.file_name, orient="records")
-        self.file_name = f"./{self.path}/{self.name}_{date_generator()}.json"
+        self.file_name = f"{self.path}/{self.name}_{date_generator()}.json"
         
     def getData(self) :
         return self.dfData
