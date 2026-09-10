@@ -1,0 +1,183 @@
+import threading
+from multiprocessing import Process, Queue
+# from ClassMotionDetection import storage
+from time import sleep
+from Utility import date_generator, hms_generator
+import pandas as pd
+
+class storage() :
+    
+    def __init__(self,name,path,data_outline:dict) :
+        self.data_outline = data_outline
+
+        self.currData = self.data_outline.copy()
+
+        self.name = name
+        self.path = path
+        self.dfData:list[dict] = [] 
+        self.file_name = f"./{self.path}/{self.name}_{date_generator()}.json"
+    
+    def append(self,attr,data) :
+        self.currData[attr] = data
+        print(f"\nappended {data} at {attr}")
+        print(f"data outline: ",self.data_outline)
+        print("dfData when currData appends ",self.dfData)
+        
+        # print(self.currData) 
+        
+    # def save(self) :
+    #     self.dfData.append(self.currData)
+    #     self.currData = self.data_outline 
+        
+    def fileSave(self) :
+        # print("\ndfData right before appending: ",self.dfData)
+        self.dfData.append(self.currData)
+        # print("dfData right after appending: ",self.dfData)
+        self.currData = self.data_outline.copy()
+ 
+        print(f"{self.name}_{date_generator()}.json")
+        pd.DataFrame(self.dfData).to_json(self.file_name, orient="records")
+        self.file_name = f"./{self.path}/{self.name}_{date_generator()}.json"
+        
+    def getData(self) :
+        return self.dfData
+    
+    def getFilePath(self) :
+        return self.file_name
+
+class fake_loadcell():
+
+   def __init__(self):
+      return
+
+   def activate(self): 
+      weight = []
+
+      loadStorage.append("date", f"{date_generator()} {hms_generator()}")
+
+      for i in range(0,4):
+         sleep(0.5)
+         weight.append(i)
+
+      loadStorage.append("weights", weight)
+
+
+         
+
+    
+class fake_cam(): 
+
+  def __init__(self):
+
+    self.storer = storage("Video","videoData",{
+      "id": 0,
+      "date": None, 
+      "iteration": 0
+    })
+
+    self.num_recording = 0
+
+  def record(self): 
+    self.num_recording += 1
+
+    # self.storer.append("date", date_generator())
+    # self.storer.append("iteration", self.num_recording); 
+
+    cam1.storer.append("date", date_generator())
+    cam1.storer.append("iteration", cam1.num_recording); 
+
+    print(f"in thread: {self.storer.currData}")
+    print(f"full data in thread: {cam1.storer.dfData}")
+
+class fake_rfid():
+
+  def __init__(self):
+    self.id = None
+
+  def getIDMain (self):
+    q = Queue()
+    p = Process(target=self.readCard, args=(q,))
+    p.start()
+    
+    p.join(timeout=5)
+    if p.is_alive() :
+        p.terminate()
+        
+        print("NO IDS DETECTED")
+            
+        return False 
+    else :
+        self.id = q.get()
+        # if self.id not in ALLOWED_IDS:
+        #     print(self.id)
+        #     print("BIRD NOT ASSOCIATED WITH THIS FEEDER")
+        #     return False 
+        
+        # birdStorer.append("id", self.id)
+        cam1.storer.append("id", self.id)
+        p.terminate()
+        
+        return True
+  
+  def readCard (self,q): 
+      # reader = self.reader
+      # print('Place Card on Reader')
+      
+      # try :
+      #     birdId,text = reader.read()
+      # except:
+      #     print("id reading error")
+      #     self.readCard()
+      
+      sleep(1)
+      q.put("12345678")
+
+loadStorage = storage("BirdData","birdData",{
+    "date": None, 
+    "id": 0, 
+    "weights": [], 
+    "avgWeight": 0
+})
+load = fake_loadcell()
+cam1 = fake_cam()
+rfid = fake_rfid() 
+  
+recording_thread = threading.Thread(target=cam1.record)
+
+def main(): 
+
+  global recording_thread
+
+
+  while True: 
+
+    if (input("\npress a: ") == "a"): 
+      recording_thread.start()
+
+      bird_present = rfid.getIDMain()
+
+      load.activate()
+
+      recording_thread.join()
+
+      
+      print(f"out of thread: {cam1.storer.currData}")
+      
+
+      # print(f"\nFULL data array: {cam1.storer.dfData}")
+      cam1.storer.append("id", "UNIDENTIFIED" if not rfid.id else rfid.id)
+      cam1.storer.fileSave()
+      loadStorage.fileSave()
+
+      print("loadStorage: ", loadStorage.dfData)
+
+      # print(f"\nFULL data array: {cam1.storer.dfData}")
+      recording_thread = threading.Thread(target=cam1.record)    
+
+    # sleep(2)
+
+
+
+
+if __name__ == "__main__":
+  main()

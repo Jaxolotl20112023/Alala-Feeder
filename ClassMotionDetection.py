@@ -60,7 +60,7 @@ class Camera() :
         self.num_recording+=1 
         print("start recording") 
         self.name = f"./videos/{date}-{self.num_recording}.mp4" 
-        self.storer.append("date",f"{date} {hms_generator()}")
+        self.storer.append("date",f"{date_generator()} {hms_generator()}")
         self.storer.append("iteration", self.num_recording)
         self.picam.start_and_record_video(self.name, duration=duration, quality=Quality.MEDIUM)
     
@@ -68,7 +68,7 @@ class Camera() :
         if (override_path) :
             self.storer.path = override_path
             
-        self.storer.save()
+        # self.storer.save()
         self.storer.fileSave() 
 
     def capture_pic(self) :
@@ -94,23 +94,32 @@ class storage() :
     
     def __init__(self,name,path,data_outline:dict) :
         self.data_outline = data_outline
-        self.currData = self.data_outline
+
+        self.currData = self.data_outline.copy()
 
         self.name = name
         self.path = path
-        self.dfData:list[dict] = [{}] 
+        self.dfData:list[dict] = [] 
         self.file_name = f"./{self.path}/{self.name}_{date_generator()}.json"
     
     def append(self,attr,data) :
         self.currData[attr] = data
-        print(f"appended {data} at {attr}")
-        print(self.currData) 
+        print(f"\nappended {data} at {attr}")
+        print(f"data outline: ",self.data_outline)
+        print("dfData when currData appends ",self.dfData)
         
-    def save(self) :
-        self.dfData.append(self.currData)
-        self.currData = self.data_outline 
+        # print(self.currData) 
+        
+    # def save(self) :
+    #     self.dfData.append(self.currData)
+    #     self.currData = self.data_outline 
         
     def fileSave(self) :
+        # print("\ndfData right before appending: ",self.dfData)
+        self.dfData.append(self.currData)
+        # print("dfData right after appending: ",self.dfData)
+        self.currData = self.data_outline.copy()
+ 
         print(f"{self.name}_{date_generator()}.json")
         pd.DataFrame(self.dfData).to_json(self.file_name, orient="records")
         self.file_name = f"./{self.path}/{self.name}_{date_generator()}.json"
@@ -138,7 +147,7 @@ class load_cell() :
         
         prevWeight = 0
         totalWeight = 0
-        weight = 0
+        weight = []
         
         numInvalidWeights = 0 
         i = 0
@@ -148,7 +157,7 @@ class load_cell() :
         
         while i < maxReadings :
             prevWeight = weight
-            weight = hx.get_weight_mean()
+            weight.append(hx.get_weight_mean())
             
             if weight <= MIN_BIRD_WEIGHT or (weight > MIN_BIRD_WEIGHT and weight-prevWeight > WEIGHT_CHANGE_ERR and prevWeight != 0):
                 print("invalid weight: ", weight)
@@ -360,7 +369,7 @@ def MotionDetectionMain() :
             stationStorer.append("date", f"{date_generator()} {hms_generator()}")
             stationStorer.append("foodLeft", INIT_FOOD-(FOOD_DISPENSED*days_operating))
             stationStorer.appemnd("days_operating", days_operating)
-            stationStorer.save()
+            # stationStorer.save()
             stationStorer.fileSave()
             
         if GPIO.input(27) or bird_present:
@@ -371,16 +380,16 @@ def MotionDetectionMain() :
             bird_present = rfid1.getIDMain()
         
             bird_cell.activate()
-            birdStorer.save()
+            # birdStorer.save()
             birdStorer.fileSave()
            
             recording_thread.join()
+
+            
             cam1.save_capture_data()
             print("join thread") 
             recording_thread = threading.Thread(target=cam1.simple_record, args=(duration,))    
 
-            while (rfid1.getIDMain()): 
-                sleep(2) 
 
             # get the weight of the food... 
             # etc...  
