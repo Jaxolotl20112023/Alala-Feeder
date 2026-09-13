@@ -1,5 +1,6 @@
 from datetime import datetime 
 from pathlib import Path
+import os 
 import json
 # import pandas as pd
 
@@ -9,28 +10,25 @@ def date_generator() :
 def hms_generator() : 
     return datetime.now().strftime("%H-%M-%S")
 
-def get_recent_file(path, file_type="*.json",date=None) :
+def get_recent_file(path, file_type="*.json") :
 
-    folder_path = Path(path)
+    most_recent_file = None
+    most_recent_time = 0 
 
-    files = folder_path.glob(file_type)
-    
-    print("file")
-    for file in files:
-        print(file.stat().st_mtime)
+    for file in os.scandir(path): 
+        time = file.stat().st_mtime 
+        if (time > most_recent_time): 
+            most_recent_time = time 
+            most_recent_file = file 
 
-    if not date: 
-        filtered = max(files, key=lambda x: x.stat().st_mtime) 
-    else :
-        for file in files:
-            if datetime.fromtimestamp(file.stat().st_mtime) == date:
-                filtered = file
+    filtered = most_recent_file
+
              
     try :
-        with open(f"{folder_path}/{filtered.name}") as f:
+        with open(f"{path}/{filtered.name}") as f:
             return json.load(f)
     except :
-        return None 
+        return "invalid" 
     
     
 # def get_json(path) :
