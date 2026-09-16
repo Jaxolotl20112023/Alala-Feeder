@@ -99,7 +99,9 @@ class storage() :
 
         self.name = name
         self.path = f"./{path}"
-        self.dfData:list[dict] = get_recent_file(path) if get_recent_file(path) else []  
+        
+        existing_data = get_recent_file(self.path)
+        self.dfData:list[dict] = [] if not existing_data else existing_data
         self.file_name = f"{self.path}/{self.name}_{date_generator()}.json"
     
     def append(self,attr,data) :
@@ -141,23 +143,23 @@ class load_cell() :
         self.hx.set_scale_ratio(ratio) 
         self.load_name = load_name 
 
-    def activate(self) : 
+    def activate(self, storer) : 
 
         hx = self.hx
         
         prevWeight = 0
         totalWeight = 0
-        weight = []
+        weight = 0
         
         numInvalidWeights = 0 
         i = 0
         maxReadings = 4
 
-        birdStorer.append("date", f"{date_generator()} {hms_generator()}")
+        storer.append("date", f"{date_generator()} {hms_generator()}")
         
         while i < maxReadings :
             prevWeight = weight
-            weight.append(hx.get_weight_mean())
+            weight = hx.get_weight_mean()
             
             if weight <= MIN_BIRD_WEIGHT or (weight > MIN_BIRD_WEIGHT and weight-prevWeight > WEIGHT_CHANGE_ERR and prevWeight != 0):
                 print("invalid weight: ", weight)
@@ -165,8 +167,8 @@ class load_cell() :
                 
                 if numInvalidWeights > 10 :
                     print("TOO MANY INVALID WEIGHTS... SKIPPING...")
-                    birdStorer.append("weights", None)
-                    birdStorer.append("avgWeight", None)
+                    storer.append("weights", None)
+                    storer.append("avgWeight", None)
 
                     stationStorer.append(self.load_name, Status.INVALID_READINGS)
                     
@@ -176,7 +178,7 @@ class load_cell() :
             numInvalidWeights = 0 
             totalWeight += weight
             
-            birdStorer.append("weights",weight) 
+            storer.append("weights",weight) 
             
             print(weight,'grams')
             i+=1
@@ -184,7 +186,7 @@ class load_cell() :
         averageWeight = totalWeight/maxReadings
         
         print("Average Weight: ", averageWeight)
-        birdStorer.append("avgWeight", averageWeight) 
+        storer.append("avgWeight", averageWeight) 
         stationStorer.append(self.load_name, Status.VALID_READINGS)
 
     def deactivate(self) : 
@@ -311,7 +313,7 @@ birdStorer = storage("BirdData","birdData", {
     "avgWeight": 0
 })
 
-feederStorer = storage("FeederData", "feederData", {
+feederStorer = storage("FeederData", "foodData", {
     "id": 0, 
     "weights": [], 
     "avgWeight": 0
@@ -369,23 +371,20 @@ def MotionDetectionMain() :
             stationStorer.append("date", f"{date_generator()} {hms_generator()}")
             stationStorer.append("foodLeft", INIT_FOOD-(FOOD_DISPENSED*days_operating))
             stationStorer.appemnd("days_operating", days_operating)
-            # stationStorer.save()
             stationStorer.fileSave()
             
-        if GPIO.input(27) or bird_present:
+        if GPIO.input(27): #or bird_present:
              
             print("Motion Detected")
             recording_thread.start()
              
             bird_present = rfid1.getIDMain()
-        
-            bird_cell.activate()
-            # birdStorer.save()
-            birdStorer.fileSave()
-           
-            recording_thread.join()
-
             
+            if bird_present: 
+                bird_cell.activate(birdStorer)
+                birdStorer.fileSave()
+               
+            recording_thread.join()
             cam1.save_capture_data()
             print("join thread") 
             recording_thread = threading.Thread(target=cam1.simple_record, args=(duration,))    

@@ -28,7 +28,7 @@ def get_recent_file(path, file_type="*.json") :
         with open(f"{path}/{filtered.name}") as f:
             return json.load(f)
     except :
-        return "invalid" 
+        return None
     
     
 # def get_json(path) :
