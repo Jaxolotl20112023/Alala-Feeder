@@ -2,7 +2,8 @@ from datetime import datetime
 from pathlib import Path
 import os 
 import json
-# import pandas as pd
+import pandas as pd
+import uuid
 
 def date_generator() :
     return datetime.now().strftime("%m-%d-%Y")
@@ -41,7 +42,19 @@ def save_file(path, data, file_type="*.json") :
         pd.DataFrame(data).to_json(path, orient="records")
 
 
-
-
+def get_feederID():
+    
+    try:
+        df = pd.read_json("./stationConstants.json",lines="true").to_dict()
+        return df["Data"]["ID"]
+        
+    except:
+        
+        df = {
+            "Data":{
+                "ID" : uuid.uuid4()
+            }
+        }
+        pd.DataFrame(df).to_json("./stationConstants.json")
 
 
