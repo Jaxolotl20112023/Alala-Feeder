@@ -105,10 +105,16 @@ class storage() :
         self.file_name = f"{self.path}/{self.name}_{date_generator()}.json"
     
     def append(self,attr,data) :
+        
+        if type(self.currData[attr]) == list:
+            print("appending to list") 
+            self.currData[attr].append(data)
+            return
+        
         self.currData[attr] = data
-        print(f"\nappended {data} at {attr}")
-        print(f"data outline: ",self.data_outline)
-        print("dfData when currData appends ",self.dfData)
+#         print(f"\nappended {data} at {attr}")
+#         print(f"data outline: ",self.data_outline)
+#         print("dfData when currData appends ",self.dfData)
         
         # print(self.currData) 
         
@@ -132,6 +138,13 @@ class storage() :
     def getFilePath(self) :
         return self.file_name
     
+    def isEmpty(self,index=None):
+        
+        if not index:
+            return currData == []
+        
+        return currData[index] == None or currData[index] == [] or currData[index] == 0 
+    
 class load_cell() : 
 
     def __init__(self,dout,sck,ratio,load_name) : 
@@ -150,6 +163,7 @@ class load_cell() :
         prevWeight = 0
         totalWeight = 0
         weight = 0
+        weights = [] 
         
         numInvalidWeights = 0 
         i = 0
@@ -178,6 +192,7 @@ class load_cell() :
             numInvalidWeights = 0 
             totalWeight += weight
             
+            weights.append(weight)
             storer.append("weights",weight) 
             
             print(weight,'grams')
@@ -217,6 +232,7 @@ class rfid() :
             return False 
         else :
             self.id = q.get()
+            print(f"id: {self.id}")
 
             if self.id not in ALLOWED_IDS:
                 print(self.id)
@@ -373,7 +389,7 @@ def MotionDetectionMain() :
             stationStorer.appemnd("days_operating", days_operating)
             stationStorer.fileSave()
             
-        if GPIO.input(27): #or bird_present:
+        if GPIO.input(27) or bird_present:
              
             print("Motion Detected")
             recording_thread.start()
@@ -382,6 +398,8 @@ def MotionDetectionMain() :
             
             if bird_present: 
                 bird_cell.activate(birdStorer)
+            else:
+                print("file save weights")
                 birdStorer.fileSave()
                
             recording_thread.join()

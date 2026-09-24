@@ -16,7 +16,7 @@ def get_recent_file(path, file_type="*.json") :
     most_recent_file = None
     most_recent_time = 0 
 
-    for file in os.scandir(path): exit
+    for file in os.scandir(path): 
     
         time = file.stat().st_mtime 
         if (time > most_recent_time): 
@@ -53,9 +53,9 @@ def get_feederID():
         
         df = {
             "Data":{
-                "ID" : uuid.uuid4()
+                "ID" : str(uuid.uuid4())
             }
         }
-        pd.DataFrame(df).to_json("./stationConstants.json")
+        pd.DataFrame(df).to_json("./stationConstants.json", orient="records")
 
 
