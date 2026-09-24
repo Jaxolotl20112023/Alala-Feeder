@@ -16,7 +16,8 @@ def get_recent_file(path, file_type="*.json") :
     most_recent_file = None
     most_recent_time = 0 
 
-    for file in os.scandir(path): 
+    for file in os.scandir(path): exit
+    
         time = file.stat().st_mtime 
         if (time > most_recent_time): 
             most_recent_time = time 
