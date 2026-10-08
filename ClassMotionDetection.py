@@ -8,6 +8,7 @@ import numpy as np
 import requests
 from time import sleep, perf_counter
 from gpiozero import Servo
+from gpiozero import Motor, RotaryEncoder
 from rclone_python import rclone
 import os
 import threading
@@ -243,38 +244,39 @@ class rfid() :
         q.put(birdId)
             
 
-class servo() : 
+# class servo() : 
 
-    def __init__(self, pin) :
-        self.pin = pin 
-        self.servo = Servo(self.pin);
+#     def __init__(self, pin) :
+#         self.pin = pin 
+#         self.servo = Servo(self.pin);
         
-        self.servo.detach()
-        self.servo.min()
-        sleep(3)
+#         self.servo.detach()
+#         self.servo.min()
+#         sleep(3)
         
-    def move_servos(self) :
-        global start_time
-        servoc = self.servo
+#     def move_servos(self) :
+#         global start_time
+#         servoc = self.servo
 
-        start_time = datetime.now().minute
-        servo.detach()
+#         start_time = datetime.now().minute
+#         servo.detach()
         
-        for i in range(0,5) :
-            print("i: ", i)
+#         for i in range(0,5) :
+#             print("i: ", i)
             
-            print("max")
-            servo.max()
-            sleep(5)
+#             print("max")
+#             servo.max()
+#             sleep(5)
             
-            print("min")
-            servo.min()
-            sleep(5)
+#             print("min")
+#             servo.min()
+#             sleep(5)
         
-        servo.detach()
+#         servo.detach()
     
-    def reset_servo(self) :
-        self.servo.value = None
+#     def reset_servo(self) :
+#         self.servo.value = Noneq
+
 
 def query(endpoint, data, callback): 
     try : 
@@ -290,7 +292,7 @@ def query(endpoint, data, callback):
 sensor = 27
 GPIO.setup(27, GPIO.IN)
 # Servo set up
-servo1 = servo(18)
+# servo1 = servo(18)
 
 #Motion Detector
 motionDetector = GPIO.input(sensor)
