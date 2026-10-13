@@ -18,9 +18,11 @@ from Constants import API_BASE_URL
 from Utility import date_generator,hms_generator,get_recent_file
 from startUp import start_up
 from Constants import Status
+import dht11
 # from Constants import ALLOWED_IDS
 
 init_data = start_up()
+
 
 GPIO.setmode(GPIO.BCM)
 MIN_BIRD_WEIGHT = 70 # change to the actual miniumum weight of the alala bird
@@ -31,6 +33,14 @@ FOOD_DISPENSED =  200
 days_operating = init_data["days_operating"]
 ALLOWED_IDS = [223041367485,288073526777]
 
+def get_dht_reading(s):
+    result = s.read() 
+    
+    while not result.is_valid():
+        result = s.read()
+        sleep(0.05)
+        
+    return result
 
 class Camera() :
     
@@ -64,11 +74,9 @@ class Camera() :
         self.storer.append("iteration", self.num_recording)
         self.picam.start_and_record_video(self.name, duration=duration, quality=Quality.MEDIUM)
     
-    def save_capture_data(self,override_path=None) :
-        if (override_path) :
-            self.storer.path = override_path
+    def save_capture_data(self) :
             
-        # self.storer.save()
+        #self.storer.save()
         self.storer.fileSave() 
 
     def capture_pic(self) :
@@ -107,7 +115,7 @@ class storage() :
     def append(self,attr,data) :
         
         if type(self.currData[attr]) == list:
-            print("appending to list") 
+            print(f"appending {attr} to list") 
             self.currData[attr].append(data)
             return
         
@@ -320,6 +328,8 @@ rfid1 = rfid(name="rfid1")
 # Load cell set up 
 ratio = 111 # kinda correct ratio is -95.4
 bird_cell = load_cell(4,17,ratio,"birdLoadCell")
+
+dhtSens = dht11.DHT11(pin=21)
 # feeder_cell = load_cell(0,0,ratio,"ALALA_FEEDER_DATA")
 
 birdStorer = storage("BirdData","birdData", {
@@ -337,9 +347,10 @@ feederStorer = storage("FeederData", "foodData", {
 
 stationStorer = storage("StationData", "stationData", {
     "date": None, 
-    # "battery": 0
-    # "temperature": 0
-    # "humidity": 0 
+    # "battery":
+    "days_operating": 0,
+    "temperature": 0,
+    "humidity": 0,
     "foodLeft": 0, 
     "birdLoadCell" : [Status.HAS_POWER, Status.VALID_READINGS],
     "feedLoadCell" : [Status.HAS_POWER, Status.VALID_READINGS],
@@ -369,6 +380,7 @@ def MotionDetectionMain() :
     global static_img_thread
     global recording_thread
     global start_time
+    global days_operating
 
     bird_present = False
 
@@ -382,11 +394,15 @@ def MotionDetectionMain() :
             query("pushStationData", stationStorer.dfData, lambda r: os.remove(stationStorer.getFilePath()) if r.status_code == 201 or r.status_code == 200 else print("could not report pi health"))
             days_operating+=1
 
-        if (perf_counter() - start_time)/60 >= 10:
+        if (perf_counter() - start_time)/60 >= 2: # divide parenthesis by 60
+            
             start_time = perf_counter()
+            result = get_dht_reading(dhtSens) 
             stationStorer.append("date", f"{date_generator()} {hms_generator()}")
             stationStorer.append("foodLeft", INIT_FOOD-(FOOD_DISPENSED*days_operating))
-            stationStorer.appemnd("days_operating", days_operating)
+            stationStorer.append("days_operating", days_operating)
+            stationStorer.append("temperature (F)", (result.temperature*1.8) + 32)
+            stationStorer.append("humidity", result.humidity)
             stationStorer.fileSave()
             
         if GPIO.input(27) or bird_present:
@@ -398,7 +414,7 @@ def MotionDetectionMain() :
             
             if bird_present: 
                 bird_cell.activate(birdStorer)
-            else:
+            #else:
                 print("file save weights")
                 birdStorer.fileSave()
                
@@ -406,10 +422,6 @@ def MotionDetectionMain() :
             cam1.save_capture_data()
             print("join thread") 
             recording_thread = threading.Thread(target=cam1.simple_record, args=(duration,))    
-
-
-            # get the weight of the food... 
-            # etc...  
 
         else:
             print("No motion")

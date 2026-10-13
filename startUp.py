@@ -8,12 +8,17 @@ def start_up() :
     
 #     feeder_id =
     
+    err = False
+    
     try: 
-        df = pd.read_json(f"./stationData/stationData_{date_generator()}.json", lines="true").to_dict()
+        df = pd.read_json(f"./stationProps.json", lines="true").to_dict()
+        print("ok")
 #     df = get_file("./stationData", "*.json")
 #     if (not df) :
     except:
         # feeder_id = df["Feed-Station-Data"][0]["feederID"]
+        print("First time booting up")
+        err = True
         
         feeder_id = uuid.uuid4()
         df = {
@@ -24,10 +29,11 @@ def start_up() :
             }
         }
         
-        pd.DataFrame(df).to_json(f"./stationData/StationData_{date_generator()}.json")
+        pd.DataFrame(df).to_json(f"./stationProps.json")
         
     print("Config data properly stored")
-    return df["Feed-Station-Data"]
+    print("Init data: ",df["Feed-Station-Data"])
+    return df["Feed-Station-Data"][0] if not err else df["Feed-Station-Data"]
 
          
     
