@@ -15,7 +15,7 @@ The feeder uses and implements:
 2. Motion detector ✅
 3. RFID scanner ✅
 4. PiCamera ✅
-5. Humidity & Temperature ❌
+5. Humidity & Temperature ✅
 6. Battery Percentage ❌
    
 The ones with the checkmarks are the electronics that have been implemented and are handled within the code. The ones with the X marks are the ones that have yet to be implemented.
