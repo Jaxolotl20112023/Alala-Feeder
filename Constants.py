@@ -16,9 +16,9 @@ class Status(Enum) :
     INVALID_READINGS = "Invalid Readings"
     VALID_READINGS = "Valid Readings"
 
-FEEDER_ID = get_feederID()
+#FEEDER_ID = get_feederID()
 
-print(FEEDER_ID)
+#print(FEEDER_ID)
 
 
 # ALLOWED_IDS = pd.read_json("./allowedIDs.json",lines="true").to_dict()
