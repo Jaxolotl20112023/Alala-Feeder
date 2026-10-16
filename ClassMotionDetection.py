@@ -45,10 +45,11 @@ def get_dht_reading(s):
 
 class Camera() :
     
-    def __init__(self) :
+    def __init__(self, pin=0) :
         self.picam = Picamera2()
-        self.encoder = H264Encoder() 
-        self.buffer_output = CircularOutput(buffersize=150)
+        self.pin = pin 
+        # self.encoder = H264Encoder() 
+        # self.buffer_output = CircularOutput(buffersize=150)
         self.storer = storage("Video","videoData",{
             "id": 0,
             "date": None, 
@@ -193,7 +194,7 @@ class load_cell() :
                     storer.append("weights", None)
                     storer.append("avgWeight", None)
 
-                    stationStorer.append(self.load_name, Status.INVALID_READINGS)
+                    deviceStorer.append(self.load_name, Status.INVALID_READINGS)
                     
                     return
                 continue
@@ -220,11 +221,12 @@ class load_cell() :
         
 class rfid() : 
 
-    def __init__(self, name) : 
-        GPIO.setmode(GPIO.BCM)                
+    def __init__(self, name, pin=0) : 
+        # GPIO.setmode(GPIO.BCM)                
         self.reader = SimpleMFRC522()
         self.id = None
         self.name = name
+        self.pin = pin 
 
     def getIDMain (self):
         q = Queue()
@@ -266,41 +268,6 @@ class rfid() :
             self.readCard()
         
         q.put(birdId)
-            
-
-# class servo() : 
-
-#     def __init__(self, pin) :
-#         self.pin = pin 
-#         self.servo = Servo(self.pin);
-        
-#         self.servo.detach()
-#         self.servo.min()
-#         sleep(3)
-        
-#     def move_servos(self) :
-#         global start_time
-#         servoc = self.servo
-
-#         start_time = datetime.now().minute
-#         servo.detach()
-        
-#         for i in range(0,5) :
-#             print("i: ", i)
-            
-#             print("max")
-#             servo.max()
-#             sleep(5)
-            
-#             print("min")
-#             servo.min()
-#             sleep(5)
-        
-#         servo.detach()
-    
-#     def reset_servo(self) :
-#         self.servo.value = Noneq
-
 
 def query(endpoint, data, callback): 
     try : 
@@ -312,6 +279,28 @@ def query(endpoint, data, callback):
     except :
         print("failed to connect") 
 
+def faultDetection(devices, storer:storage) :
+
+    GPIO.setmode(GPIO.BCM)
+
+    for key in devices.keys(): 
+
+        for i in range(0,len(key)):
+            pin = key[i]
+
+            off_callback = lambda channel: storer.append(key,Status.NO_POWER) 
+
+            GPIO.setup(pin,GPIO.IN,pull_up_down=GPIO.PUD_UP)
+
+            GPIO.add_event_callback(pin,GPIO.FALLING,callback=off_callback)
+
+            sleep(0.25)
+
+            GPIO.cleanup()
+
+    return storer
+
+
 # Motion sensor set up
 sensor = 27
 GPIO.setup(27, GPIO.IN)
@@ -322,14 +311,14 @@ GPIO.setup(27, GPIO.IN)
 motionDetector = GPIO.input(sensor)
 
 # Camera set up
-cam1 = Camera()
+cam1 = Camera() # specify the GPIO pin
 
 # RFID set up 
-rfid1 = rfid(name="rfid1") 
+rfid1 = rfid(name="rfid1") # specify the GPIO pin 
 
 # Load cell set up 
 ratio = 111 # kinda correct ratio is -95.4
-bird_cell = load_cell(4,17,ratio,"birdLoadCell")
+birdCell = load_cell(4,17,ratio,"birdLoadCell")
 
 dhtSens = dht11.DHT11(pin=21)
 # feeder_cell = load_cell(0,0,ratio,"ALALA_FEEDER_DATA")
@@ -347,17 +336,25 @@ feederStorer = storage("FeederData", "foodData", {
     "avgWeight": 0
 })
 
+devicePin = {
+    birdCell.load_name: [birdCell.dout, birdCell.sck], 
+    rfid1.name: [rfid1.pin],
+    cam1.name: [cam1.pin]
+}
+
+deviceStorer = storage("DeviceData", "deviceData", {
+    birdCell.load_name: Status.VALID_READINGS, 
+    rfid1.name: Status.HAS_POWER,
+    cam1.name: Status.HAS_POWER
+})
+
 stationStorer = storage("StationData", "stationData", {
     "date": None, 
     # "battery":
-    "days_operating": 0,
     "temperature": 0,
     "humidity": 0,
     "foodLeft": 0, 
-    "birdLoadCell" : [Status.HAS_POWER, Status.VALID_READINGS],
-    "feedLoadCell" : [Status.HAS_POWER, Status.VALID_READINGS],
-    "motionDetector" : [Status.HAS_POWER, Status.VALID_READINGS],
-    "RFIDreader" : [Status.HAS_POWER, Status.VALID_READINGS],
+    "fault": False
 })
 
 #foodStorer = storage("FoodData", "foodData") 
@@ -400,12 +397,14 @@ def MotionDetectionMain() :
             
             start_time = perf_counter()
             result = get_dht_reading(dhtSens) 
+            deviceStorer = faultDetection(devicePin,deviceStorer)
+
             stationStorer.append("date", f"{date_generator()} {hms_generator()}")
             stationStorer.append("foodLeft", INIT_FOOD-(FOOD_DISPENSED*days_operating))
-            stationStorer.append("days_operating", days_operating)
             stationStorer.append("temperature (F)", (result.temperature*1.8) + 32)
             stationStorer.append("humidity", result.humidity)
             stationStorer.fileSave()
+            deviceStorer.fileSave()
             
         if GPIO.input(27) or bird_present:
              
@@ -415,7 +414,7 @@ def MotionDetectionMain() :
             bird_present = rfid1.getIDMain()
             
             if bird_present: 
-                bird_cell.activate(birdStorer)
+                birdCell.activate(birdStorer)
             #else:
                 print("file save weights")
                 birdStorer.fileSave()
