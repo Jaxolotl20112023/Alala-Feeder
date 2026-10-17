@@ -39,15 +39,16 @@ def get_dht_reading(s):
     
     while not result.is_valid():
         result = s.read()
-        sleep(0.05)
+        print(result.temperature,result.humidity)
+        sleep(0.01)
         
     return result
 
 class Camera() :
     
-    def __init__(self, pin=0) :
+    def __init__(self,pin=0) :
         self.picam = Picamera2()
-        self.pin = pin 
+        self.pin = pin
         # self.encoder = H264Encoder() 
         # self.buffer_output = CircularOutput(buffersize=150)
         self.storer = storage("Video","videoData",{
@@ -102,7 +103,7 @@ class Camera() :
 
 class storage() :
     
-    def __init__(self,name,path,data_outline:dict) :
+    def __init__(self,name,path,data_outline:dict,override=False) :
         self.data_outline = data_outline
 
         self.currData = self.data_outline.copy()
@@ -110,7 +111,7 @@ class storage() :
         self.name = name
         self.path = f"./{path}"
         
-        existing_data = get_recent_file(self.path)
+        existing_data = get_recent_file(self.path) if not override else None
         self.dfData:list[dict] = [] if not existing_data else existing_data
         self.file_name = f"{self.path}/{self.name}_{date_generator()}.json"
     
@@ -194,7 +195,7 @@ class load_cell() :
                     storer.append("weights", None)
                     storer.append("avgWeight", None)
 
-                    deviceStorer.append(self.load_name, Status.INVALID_READINGS)
+                    deviceStorer.append(self.load_name, Status.INVALID_READINGS.value)
                     
                     return
                 continue
@@ -212,7 +213,7 @@ class load_cell() :
         
         print("Average Weight: ", averageWeight)
         storer.append("avgWeight", averageWeight) 
-        stationStorer.append(self.load_name, Status.VALID_READINGS)
+        stationStorer.append(self.load_name, Status.VALID_READINGS.value)
 
     def deactivate(self) : 
         GPIO.output(self.dout,GPIO.LOW)
@@ -281,22 +282,24 @@ def query(endpoint, data, callback):
 
 def faultDetection(devices, storer:storage) :
 
-    GPIO.setmode(GPIO.BCM)
+    for key in devices.keys():
+        
+        pins = devices[key] 
 
-    for key in devices.keys(): 
+        for i in range(0,len(pins)):
+            pin = pins[i]
+            
+            print("Checking the faults on ",pin)
 
-        for i in range(0,len(key)):
-            pin = key[i]
+            GPIO.setup(pin,GPIO.IN)
 
-            off_callback = lambda channel: storer.append(key,Status.NO_POWER) 
-
-            GPIO.setup(pin,GPIO.IN,pull_up_down=GPIO.PUD_UP)
-
-            GPIO.add_event_callback(pin,GPIO.FALLING,callback=off_callback)
-
-            sleep(0.25)
+            if (GPIO.input(pin) == GPIO.LOW):
+                storer.append(key,Status.NO_POWER.value)
+            else:
+                storer.append(key,Status.HAS_POWER.value)
 
             GPIO.cleanup()
+            GPIO.setmode(GPIO.BCM)
 
     return storer
 
@@ -314,7 +317,7 @@ motionDetector = GPIO.input(sensor)
 cam1 = Camera() # specify the GPIO pin
 
 # RFID set up 
-rfid1 = rfid(name="rfid1") # specify the GPIO pin 
+rfid1 = rfid(name="rfid1",pin=24) # specify the GPIO pin 
 
 # Load cell set up 
 ratio = 111 # kinda correct ratio is -95.4
@@ -336,22 +339,22 @@ feederStorer = storage("FeederData", "foodData", {
     "avgWeight": 0
 })
 
-devicePin = {
-    birdCell.load_name: [birdCell.dout, birdCell.sck], 
+devicePins = {
+    birdCell.load_name: [birdCell.sck], 
     rfid1.name: [rfid1.pin],
-    cam1.name: [cam1.pin]
+    "cam1": [cam1.pin]
 }
 
-deviceStorer = storage("DeviceData", "deviceData", {
-    birdCell.load_name: Status.VALID_READINGS, 
-    rfid1.name: Status.HAS_POWER,
-    cam1.name: Status.HAS_POWER
-})
+deviceStorer = storage("deviceData", "stationData", {
+    birdCell.load_name: Status.VALID_READINGS.value, 
+    rfid1.name: Status.HAS_POWER.value,
+    "cam1": Status.HAS_POWER.value
+}, True)
 
 stationStorer = storage("StationData", "stationData", {
     "date": None, 
     # "battery":
-    "temperature": 0,
+    "temperature (F)": 0,
     "humidity": 0,
     "foodLeft": 0, 
     "fault": False
@@ -380,6 +383,7 @@ def MotionDetectionMain() :
     global recording_thread
     global start_time
     global days_operating
+    global deviceStorer
 
     bird_present = False
 
@@ -393,11 +397,15 @@ def MotionDetectionMain() :
             query("pushStationData", stationStorer.dfData, lambda r: os.remove(stationStorer.getFilePath()) if r.status_code == 201 or r.status_code == 200 else print("could not report pi health"))
             days_operating+=1
 
-        if (perf_counter() - start_time)/60 >= 2: # divide parenthesis by 60
+        if (perf_counter() - start_time) >= 2: # divide parenthesis by 60
             
             start_time = perf_counter()
-            result = get_dht_reading(dhtSens) 
-            deviceStorer = faultDetection(devicePin,deviceStorer)
+            
+            print("Getting the DHT11 readings...")
+            result = get_dht_reading(dhtSens)
+            
+            print("Fault detection...")
+            deviceStorer = faultDetection(devicePins,deviceStorer)
 
             stationStorer.append("date", f"{date_generator()} {hms_generator()}")
             stationStorer.append("foodLeft", INIT_FOOD-(FOOD_DISPENSED*days_operating))
@@ -405,27 +413,29 @@ def MotionDetectionMain() :
             stationStorer.append("humidity", result.humidity)
             stationStorer.fileSave()
             deviceStorer.fileSave()
-            
-        if GPIO.input(27) or bird_present:
-             
-            print("Motion Detected")
-            recording_thread.start()
-             
-            bird_present = rfid1.getIDMain()
-            
-            if bird_present: 
-                birdCell.activate(birdStorer)
-            #else:
-                print("file save weights")
-                birdStorer.fileSave()
-               
-            recording_thread.join()
-            cam1.save_capture_data()
-            print("join thread") 
-            recording_thread = threading.Thread(target=cam1.simple_record, args=(duration,))    
+        try:   
+            if GPIO.input(27) or bird_present:
+                 
+                print("Motion Detected")
+                recording_thread.start()
+                 
+                bird_present = rfid1.getIDMain()
+                
+                if bird_present: 
+                    birdCell.activate(birdStorer)
+                #else:
+                    print("file save weights")
+                    birdStorer.fileSave()
+                   
+                recording_thread.join()
+                cam1.save_capture_data()
+                print("join thread") 
+                recording_thread = threading.Thread(target=cam1.simple_record, args=(duration,))    
 
-        else:
-            print("No motion")
+            else:
+                print("No motion")
+        except RuntimeError:
+            GPIO.setup(27,GPIO.IN)
     
 if __name__ == "__main__":
     MotionDetectionMain()
